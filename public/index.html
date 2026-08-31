@@ -25,24 +25,24 @@
 
   .search-wrap { padding:18px 16px 6px; position:relative; }
   #searchInput {
-    width:100%; padding:14px 16px; border-radius:14px; border:1.5px solid #cfdbee;
-    background:#f4f7fc; color:#1a2233; font-size:16px; outline:none;
+    width:100%; padding:14px 16px; border-radius:14px; border:2px solid #2563eb;
+    background:#f4f7fc; color:#1a2233; font-size:16px; outline:none; font-weight:700;
   }
   #searchInput:focus { border-color:#2563eb; }
   #suggestions {
     position:absolute; left:16px; right:16px; top:64px; background:#ffffff;
-    border:1.5px solid #cfdbee; border-radius:14px; overflow:hidden;
+    border:2px solid #2563eb; border-radius:14px; overflow:hidden;
     z-index:10; max-height:280px; overflow-y:auto; display:none;
-    box-shadow:0 8px 20px rgba(37,99,235,0.08);
+    box-shadow:0 8px 20px rgba(37,99,235,0.12);
   }
   .suggestion-item {
     display:flex; align-items:center; gap:12px; padding:12px 14px;
-    border-bottom:1px solid #eef2f8; cursor:pointer;
+    border-bottom:1px solid #eaf1fb; cursor:pointer;
   }
-  .suggestion-item:hover, .suggestion-item:active { background:#f4f7fc; }
+  .suggestion-item:hover, .suggestion-item:active { background:#eaf1fb; }
   .suggestion-item img { width:28px; height:28px; border-radius:6px; background:#fff; object-fit:contain; border:1px solid #eef2f8; }
-  .suggestion-item .sym { font-weight:700; font-size:14px; color:#1a2233; }
-  .suggestion-item .name { font-size:12px; color:#6b7684; }
+  .suggestion-item .sym { font-weight:800; font-size:14px; color:#1e40af; }
+  .suggestion-item .name { font-size:12px; color:#3d5a85; font-weight:700; }
 
   #loading { text-align:center; padding:40px 20px; color:#6b7684; display:none; }
   #error { text-align:center; padding:20px; color:#dc2626; display:none; }
@@ -72,7 +72,7 @@
   .strike-card.put .strike-value { color:#dc2626; }
 
   .price-banner {
-    background:#eaf1fb; border:1.5px solid #93b8ec; border-radius:12px;
+    background:#eaf1fb; border:2px solid #2563eb; border-radius:12px;
     padding:12px 14px; margin-bottom:20px; text-align:center;
   }
   .price-banner .value { font-size:14px; font-weight:800; color:#1e40af; }
@@ -81,16 +81,16 @@
     display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;
   }
   .stat-box {
-    background:#eaf1fb; border-radius:14px; padding:14px; border:1px solid #cfe0f7;
+    background:#eaf1fb; border-radius:14px; padding:14px; border:2px solid #2563eb;
   }
-  .stat-box .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; }
+  .stat-box .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; }
   .stat-box .value { font-size:19px; font-weight:800; margin-top:4px; color:#1e40af; }
 
   .next-earnings {
     background:#eaf1fb; border-radius:12px; padding:12px 14px; margin-bottom:18px;
-    text-align:center; border:1px solid #cfe0f7;
+    text-align:center; border:2px solid #2563eb;
   }
-  .next-earnings .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; }
+  .next-earnings .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; }
   .next-earnings .value { font-size:16px; font-weight:800; margin-top:2px; color:#1e40af; }
 
   .section-title { font-size:14px; font-weight:700; color:#3d5a85; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
@@ -98,9 +98,10 @@
   .earning-row {
     display:flex; justify-content:space-between; align-items:center;
     background:#eaf1fb; border-radius:12px; padding:12px 14px; margin-bottom:8px;
-    border:1px solid #cfe0f7;
+    border:2px solid #2563eb;
   }
-  .earning-row .date { font-size:13px; color:#1e40af; font-weight:600; }
+  .earning-row .date { font-size:13px; color:#1e40af; font-weight:800; }
+  .earning-row .prices { font-size:11px; color:#3d5a85; margin-top:3px; font-weight:700; }
   .earning-row .move { text-align:right; }
   .earning-row .move .dollar { font-weight:800; font-size:14px; }
   .earning-row .move .percent { font-size:11px; }
@@ -109,7 +110,7 @@
 
   .install-hint {
     margin:20px 16px 0; padding:12px 14px; background:#eaf1fb; border-radius:12px;
-    font-size:12px; color:#3d5a85; text-align:center; border:1px solid #cfe0f7;
+    font-size:12px; color:#3d5a85; text-align:center; border:2px solid #2563eb; font-weight:700;
   }
 </style>
 </head>
@@ -266,7 +267,10 @@ function renderResults(data, symbol) {
   const list = document.getElementById("earningsList");
   list.innerHTML = data.earnings_history.map(e => `
     <div class="earning-row">
-      <div class="date">${e.date}</div>
+      <div>
+        <div class="date">${e.date}</div>
+        <div class="prices">Cerró $${e.prev_close} → $${e.reaction_close}</div>
+      </div>
       <div class="move">
         <div class="dollar ${e.direction}">${e.direction === 'up' ? '▲' : '▼'} $${Math.abs(e.gap_dollar)}</div>
         <div class="percent ${e.direction}">${e.gap_percent}%</div>
