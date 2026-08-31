@@ -140,6 +140,7 @@ exports.handler = async (event) => {
     );
     const positiveCount = results.filter((r) => r.direction === "up").length;
     const suggestedStrike = round2(currentPrice + avgMoveDollar);
+    const suggestedPutStrike = round2(currentPrice - avgMoveDollar);
 
     return {
       statusCode: 200,
@@ -155,6 +156,7 @@ exports.handler = async (event) => {
         positive_count: positiveCount,
         total_count: results.length,
         suggested_call_strike: suggestedStrike,
+        suggested_put_strike: suggestedPutStrike,
       }),
     };
   } catch (error) {
