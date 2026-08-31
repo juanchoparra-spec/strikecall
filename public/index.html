@@ -10,93 +10,106 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
   body {
-    background: linear-gradient(160deg,#0a0e17 0%,#0d1420 100%);
-    color:#e8edf5; min-height:100vh; padding-bottom:40px;
+    background:#ffffff;
+    color:#1a2233; min-height:100vh; padding-bottom:40px;
   }
   header {
     padding:24px 20px 16px; text-align:center;
-    border-bottom:1px solid rgba(255,255,255,0.06);
+    border-bottom:1px solid #e5e9f0;
   }
   header h1 {
     font-size:26px; font-weight:800; letter-spacing:-0.5px;
-    background:linear-gradient(90deg,#4ade80,#22c55e);
-    -webkit-background-clip:text; background-clip:text; color:transparent;
+    color:#2563eb;
   }
-  header p { color:#8b95a8; font-size:13px; margin-top:4px; }
+  header p { color:#6b7684; font-size:13px; margin-top:4px; }
 
   .search-wrap { padding:18px 16px 6px; position:relative; }
   #searchInput {
-    width:100%; padding:14px 16px; border-radius:14px; border:1px solid rgba(255,255,255,0.1);
-    background:#141b28; color:#fff; font-size:16px; outline:none;
+    width:100%; padding:14px 16px; border-radius:14px; border:1.5px solid #cfdbee;
+    background:#f4f7fc; color:#1a2233; font-size:16px; outline:none;
   }
-  #searchInput:focus { border-color:#22c55e; }
+  #searchInput:focus { border-color:#2563eb; }
   #suggestions {
-    position:absolute; left:16px; right:16px; top:64px; background:#141b28;
-    border:1px solid rgba(255,255,255,0.1); border-radius:14px; overflow:hidden;
+    position:absolute; left:16px; right:16px; top:64px; background:#ffffff;
+    border:1.5px solid #cfdbee; border-radius:14px; overflow:hidden;
     z-index:10; max-height:280px; overflow-y:auto; display:none;
+    box-shadow:0 8px 20px rgba(37,99,235,0.08);
   }
   .suggestion-item {
     display:flex; align-items:center; gap:12px; padding:12px 14px;
-    border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer;
+    border-bottom:1px solid #eef2f8; cursor:pointer;
   }
-  .suggestion-item:hover, .suggestion-item:active { background:#1c2536; }
-  .suggestion-item img { width:28px; height:28px; border-radius:6px; background:#fff; object-fit:contain; }
-  .suggestion-item .sym { font-weight:700; font-size:14px; }
-  .suggestion-item .name { font-size:12px; color:#8b95a8; }
+  .suggestion-item:hover, .suggestion-item:active { background:#f4f7fc; }
+  .suggestion-item img { width:28px; height:28px; border-radius:6px; background:#fff; object-fit:contain; border:1px solid #eef2f8; }
+  .suggestion-item .sym { font-weight:700; font-size:14px; color:#1a2233; }
+  .suggestion-item .name { font-size:12px; color:#6b7684; }
 
-  #loading { text-align:center; padding:40px 20px; color:#8b95a8; display:none; }
-  #error { text-align:center; padding:20px; color:#f87171; display:none; }
+  #loading { text-align:center; padding:40px 20px; color:#6b7684; display:none; }
+  #error { text-align:center; padding:20px; color:#dc2626; display:none; }
 
   #results { padding:20px 16px; display:none; }
 
   .card-header {
     display:flex; align-items:center; gap:12px; margin-bottom:18px;
   }
-  .card-header img { width:44px; height:44px; border-radius:10px; background:#fff; object-fit:contain; }
-  .card-header .sym { font-size:22px; font-weight:800; }
-  .card-header .price { font-size:22px; font-weight:800; color:#4ade80; margin-left:auto; }
+  .card-header img { width:44px; height:44px; border-radius:10px; background:#fff; object-fit:contain; border:1px solid #eef2f8; }
+  .card-header .sym { font-size:22px; font-weight:800; color:#1a2233; }
+  .card-header .price { font-size:22px; font-weight:800; color:#2563eb; margin-left:auto; }
+
+  .strike-row {
+    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;
+  }
+  .strike-card {
+    border-radius:16px; padding:18px 12px; text-align:center; border:2px solid;
+  }
+  .strike-card.call { background:#eafaf0; border-color:#22c55e; }
+  .strike-card.put { background:#fdecec; border-color:#ef4444; }
+  .strike-card .label { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; }
+  .strike-card.call .label { color:#15803d; }
+  .strike-card.put .label { color:#b91c1c; }
+  .strike-card .strike-value { font-size:26px; font-weight:900; margin-top:6px; }
+  .strike-card.call .strike-value { color:#16a34a; }
+  .strike-card.put .strike-value { color:#dc2626; }
+
+  .price-banner {
+    background:#eaf1fb; border:1.5px solid #93b8ec; border-radius:12px;
+    padding:12px 14px; margin-bottom:20px; text-align:center;
+  }
+  .price-banner .value { font-size:14px; font-weight:800; color:#1e40af; }
 
   .stat-grid {
     display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;
   }
   .stat-box {
-    background:#141b28; border-radius:14px; padding:14px; border:1px solid rgba(255,255,255,0.06);
+    background:#eaf1fb; border-radius:14px; padding:14px; border:1px solid #cfe0f7;
   }
-  .stat-box .label { font-size:11px; color:#8b95a8; text-transform:uppercase; letter-spacing:0.5px; }
-  .stat-box .value { font-size:19px; font-weight:800; margin-top:4px; }
+  .stat-box .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; }
+  .stat-box .value { font-size:19px; font-weight:800; margin-top:4px; color:#1e40af; }
 
-  .strike-card {
-    background:linear-gradient(135deg,#14532d,#16803d);
-    border-radius:16px; padding:20px; margin-bottom:22px; text-align:center;
+  .next-earnings {
+    background:#eaf1fb; border-radius:12px; padding:12px 14px; margin-bottom:18px;
+    text-align:center; border:1px solid #cfe0f7;
   }
-  .strike-card .label { font-size:12px; text-transform:uppercase; letter-spacing:1px; opacity:0.85; }
-  .strike-card .strike-value { font-size:34px; font-weight:900; margin-top:6px; }
-  .strike-card .sub { font-size:12px; opacity:0.85; margin-top:6px; }
+  .next-earnings .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; }
+  .next-earnings .value { font-size:16px; font-weight:800; margin-top:2px; color:#1e40af; }
 
-  .section-title { font-size:14px; font-weight:700; color:#8b95a8; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
+  .section-title { font-size:14px; font-weight:700; color:#3d5a85; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
 
   .earning-row {
     display:flex; justify-content:space-between; align-items:center;
-    background:#141b28; border-radius:12px; padding:12px 14px; margin-bottom:8px;
-    border:1px solid rgba(255,255,255,0.06);
+    background:#eaf1fb; border-radius:12px; padding:12px 14px; margin-bottom:8px;
+    border:1px solid #cfe0f7;
   }
-  .earning-row .date { font-size:13px; color:#c5cdd9; }
+  .earning-row .date { font-size:13px; color:#1e40af; font-weight:600; }
   .earning-row .move { text-align:right; }
   .earning-row .move .dollar { font-weight:800; font-size:14px; }
   .earning-row .move .percent { font-size:11px; }
-  .up { color:#4ade80; }
-  .down { color:#f87171; }
-
-  .next-earnings {
-    background:#1e2a3a; border-radius:12px; padding:12px 14px; margin-bottom:18px;
-    text-align:center; border:1px solid rgba(74,222,128,0.2);
-  }
-  .next-earnings .label { font-size:11px; color:#8b95a8; text-transform:uppercase; letter-spacing:0.5px; }
-  .next-earnings .value { font-size:16px; font-weight:800; margin-top:2px; color:#4ade80; }
+  .up { color:#16a34a; }
+  .down { color:#dc2626; }
 
   .install-hint {
-    margin:20px 16px 0; padding:12px 14px; background:#141b28; border-radius:12px;
-    font-size:12px; color:#8b95a8; text-align:center; border:1px solid rgba(255,255,255,0.06);
+    margin:20px 16px 0; padding:12px 14px; background:#eaf1fb; border-radius:12px;
+    font-size:12px; color:#3d5a85; text-align:center; border:1px solid #cfe0f7;
   }
 </style>
 </head>
@@ -122,10 +135,19 @@
     <div class="price" id="companyPrice"></div>
   </div>
 
-  <div class="strike-card">
-    <div class="label">Strike sugerido para Call</div>
-    <div class="strike-value" id="suggestedStrike">--</div>
-    <div class="sub" id="strikeSub">precio actual + movimiento promedio</div>
+  <div class="strike-row">
+    <div class="strike-card call">
+      <div class="label">Strike sugerido Call</div>
+      <div class="strike-value" id="suggestedStrikeCall">--</div>
+    </div>
+    <div class="strike-card put">
+      <div class="label">Strike sugerido Put</div>
+      <div class="strike-value" id="suggestedStrikePut">--</div>
+    </div>
+  </div>
+
+  <div class="price-banner">
+    <div class="value" id="priceBannerText">--</div>
   </div>
 
   <div class="next-earnings" id="nextEarningsBox" style="display:none;">
@@ -224,9 +246,10 @@ function renderResults(data, symbol) {
   document.getElementById("companySymbol").textContent = data.symbol;
   document.getElementById("companyPrice").textContent = `$${data.current_price}`;
   document.getElementById("companyLogo").src = data.logo || "";
-  document.getElementById("suggestedStrike").textContent = `$${data.suggested_call_strike}`;
-  document.getElementById("strikeSub").textContent =
-    `precio actual $${data.current_price} + movimiento promedio $${data.avg_move_dollar}`;
+  document.getElementById("suggestedStrikeCall").textContent = `$${data.suggested_call_strike}`;
+  document.getElementById("suggestedStrikePut").textContent = `$${data.suggested_put_strike}`;
+  document.getElementById("priceBannerText").textContent =
+    `Precio actual $${data.current_price} + movimiento promedio $${data.avg_move_dollar}`;
   document.getElementById("avgMove").textContent =
     `$${data.avg_move_dollar} (${data.avg_move_percent}%)`;
   document.getElementById("positiveCount").textContent =
