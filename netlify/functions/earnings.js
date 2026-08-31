@@ -58,14 +58,34 @@ exports.handler = async (event) => {
     }
 
     // 2. Historial de earnings pasados: fecha REAL de reporte + horario (bmo/amc)
-    // (calendar/earnings trae la fecha de publicacion real, a diferencia de stock/earnings
-    // que solo trae el cierre del trimestre fiscal, causa de datos incorrectos)
-    const calRes = await fetch(
-      `${FINNHUB_BASE}/calendar/earnings?from=${fromDate.toISOString().slice(0,10)}&to=${today.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
+    // El filtro por symbol en calendar/earnings es poco confiable en el plan free,
+    // asi que recorremos mes a mes SIN filtro (en paralelo) y buscamos el ticker nosotros mismos.
+    const monthsToCheck = [];
+    for (let m = 0; m < 15; m++) {
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() - m + 1, 0);
+      const monthStart = new Date(today.getFullYear(), today.getMonth() - m, 1);
+      if (monthEnd > today) monthEnd.setTime(today.getTime());
+      monthsToCheck.push({ from: monthStart, to: monthEnd });
+    }
+
+    const monthResults = await Promise.all(
+      monthsToCheck.map(async ({ from, to }) => {
+        try {
+          const monthRes = await fetch(
+            `${FINNHUB_BASE}/calendar/earnings?from=${from.toISOString().slice(0,10)}&to=${to.toISOString().slice(0,10)}&token=${FINNHUB_API_KEY}`
+          );
+          const monthData = await monthRes.json();
+          return (monthData.earningsCalendar || []).filter(
+            (e) => e.symbol === symbol && new Date(e.date) <= today
+          );
+        } catch (e) {
+          return [];
+        }
+      })
     );
-    const calData = await calRes.json();
-    let earningsCalendar = (calData.earningsCalendar || [])
-      .filter((e) => new Date(e.date) <= today)
+
+    let earningsCalendar = monthResults
+      .flat()
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 4)
       .map((e) => ({ date: e.date, hour: e.hour || "amc" }));
