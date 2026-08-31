@@ -87,6 +87,13 @@
   .up { color:#4ade80; }
   .down { color:#f87171; }
 
+  .next-earnings {
+    background:#1e2a3a; border-radius:12px; padding:12px 14px; margin-bottom:18px;
+    text-align:center; border:1px solid rgba(74,222,128,0.2);
+  }
+  .next-earnings .label { font-size:11px; color:#8b95a8; text-transform:uppercase; letter-spacing:0.5px; }
+  .next-earnings .value { font-size:16px; font-weight:800; margin-top:2px; color:#4ade80; }
+
   .install-hint {
     margin:20px 16px 0; padding:12px 14px; background:#141b28; border-radius:12px;
     font-size:12px; color:#8b95a8; text-align:center; border:1px solid rgba(255,255,255,0.06);
@@ -119,6 +126,11 @@
     <div class="label">Strike sugerido para Call</div>
     <div class="strike-value" id="suggestedStrike">--</div>
     <div class="sub" id="strikeSub">precio actual + movimiento promedio</div>
+  </div>
+
+  <div class="next-earnings" id="nextEarningsBox" style="display:none;">
+    <div class="label">Último earning reportado</div>
+    <div class="value" id="nextEarningsDate">--</div>
   </div>
 
   <div class="stat-grid">
@@ -211,6 +223,7 @@ async function selectTicker(symbol) {
 function renderResults(data, symbol) {
   document.getElementById("companySymbol").textContent = data.symbol;
   document.getElementById("companyPrice").textContent = `$${data.current_price}`;
+  document.getElementById("companyLogo").src = data.logo || "";
   document.getElementById("suggestedStrike").textContent = `$${data.suggested_call_strike}`;
   document.getElementById("strikeSub").textContent =
     `precio actual $${data.current_price} + movimiento promedio $${data.avg_move_dollar}`;
@@ -218,6 +231,14 @@ function renderResults(data, symbol) {
     `$${data.avg_move_dollar} (${data.avg_move_percent}%)`;
   document.getElementById("positiveCount").textContent =
     `${data.positive_count}/${data.total_count}`;
+
+  const nextBox = document.getElementById("nextEarningsBox");
+  if (data.earnings_history && data.earnings_history.length > 0) {
+    document.getElementById("nextEarningsDate").textContent = data.earnings_history[0].date;
+    nextBox.style.display = "block";
+  } else {
+    nextBox.style.display = "none";
+  }
 
   const list = document.getElementById("earningsList");
   list.innerHTML = data.earnings_history.map(e => `
