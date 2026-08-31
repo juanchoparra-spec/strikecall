@@ -269,7 +269,8 @@ function renderResults(data, symbol) {
     <div class="earning-row">
       <div>
         <div class="date">${e.date}</div>
-        <div class="prices">Cerró $${e.prev_close} → $${e.reaction_close}</div>
+        <div class="prices">Cerró $${e.prev_close} → Abrió $${e.reaction_close}</div>
+        <div class="prices" style="opacity:0.7;">${e.hour === 'bmo' ? 'Reportó antes de apertura' : 'Reportó después de cierre'}</div>
       </div>
       <div class="move">
         <div class="dollar ${e.direction}">${e.direction === 'up' ? '▲' : '▼'} $${Math.abs(e.gap_dollar)}</div>
