@@ -102,6 +102,22 @@ exports.handler = async (event) => {
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 4);
 
+    // 1e. Horario de cada earning (bmo = antes de apertura, amc = despues de cierre)
+    let hourMap = {};
+    try {
+      const hourFrom = new Date();
+      hourFrom.setFullYear(today.getFullYear() - 2);
+      const hourRes = await fetch(
+        `${FINNHUB_BASE}/calendar/earnings?from=${hourFrom.toISOString().slice(0,10)}&to=${today.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
+      );
+      const hourData = await hourRes.json();
+      (hourData.earningsCalendar || []).forEach((e) => {
+        hourMap[e.date] = e.hour || "amc";
+      });
+    } catch (e) {
+      hourMap = {};
+    }
+
     // 3. Historial de precios diarios (Yahoo Finance, no requiere API key)
     const fromTs = Math.floor(fromDate.getTime() / 1000);
     const toTs = Math.floor(today.getTime() / 1000);
@@ -117,14 +133,16 @@ exports.handler = async (event) => {
     }
 
     const closes = chartResult.indicators.quote[0].close;
+    const opens = chartResult.indicators.quote[0].open;
     const timestamps = chartResult.timestamp.map((t) => new Date(t * 1000));
 
     const results = [];
     for (const earn of earningsCalendar) {
       const earnDate = new Date(earn.date);
-      const gapInfo = calculateGap(timestamps, closes, earnDate);
+      const hour = hourMap[earn.date] || "amc";
+      const gapInfo = calculateGap(timestamps, closes, opens, earnDate, hour);
       if (gapInfo) {
-        results.push({ date: earn.date, ...gapInfo });
+        results.push({ date: earn.date, hour, ...gapInfo });
       }
     }
 
@@ -164,30 +182,61 @@ exports.handler = async (event) => {
   }
 };
 
-function calculateGap(timestamps, closes, earnDate) {
-  let prevIdx = -1;
-  let afterIdx = -1;
-
+function calculateGap(timestamps, closes, opens, earnDate, hour) {
+  // Encuentra el indice del dia exacto del earning (si cotiza ese dia)
+  let earnIdx = -1;
   for (let i = 0; i < timestamps.length; i++) {
-    if (closes[i] === null || closes[i] === undefined) continue;
-    if (timestamps[i] < earnDate) prevIdx = i;
-    if (timestamps[i] >= earnDate && afterIdx === -1) afterIdx = i;
+    if (sameDay(timestamps[i], earnDate)) { earnIdx = i; break; }
   }
 
-  if (prevIdx === -1 || afterIdx === -1) return null;
+  let prevIdx, reactionIdx;
+
+  if (hour === "bmo") {
+    // Reporta ANTES de abrir el mercado: el gap es cierre del dia anterior -> apertura del mismo dia
+    reactionIdx = earnIdx !== -1 ? earnIdx : findFirstOnOrAfter(timestamps, earnDate);
+    prevIdx = reactionIdx - 1;
+  } else {
+    // Reporta DESPUES del cierre (amc) o desconocido: cierre del dia del reporte -> apertura del dia siguiente
+    prevIdx = earnIdx !== -1 ? earnIdx : findLastBefore(timestamps, earnDate);
+    reactionIdx = prevIdx + 1;
+  }
+
+  if (prevIdx == null || reactionIdx == null || prevIdx < 0 || reactionIdx >= timestamps.length) return null;
+  if (closes[prevIdx] == null || opens[reactionIdx] == null) return null;
 
   const prevClose = closes[prevIdx];
-  const reactionClose = closes[afterIdx];
-  const gapDollar = round2(reactionClose - prevClose);
+  const reactionOpen = opens[reactionIdx];
+  const gapDollar = round2(reactionOpen - prevClose);
   const gapPercent = round2((gapDollar / prevClose) * 100);
 
   return {
     prev_close: round2(prevClose),
-    reaction_close: round2(reactionClose),
+    reaction_close: round2(reactionOpen),
     gap_dollar: gapDollar,
     gap_percent: gapPercent,
     direction: gapDollar >= 0 ? "up" : "down",
   };
+}
+
+function sameDay(a, b) {
+  return a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth() &&
+    a.getUTCDate() === b.getUTCDate();
+}
+
+function findLastBefore(timestamps, date) {
+  let idx = -1;
+  for (let i = 0; i < timestamps.length; i++) {
+    if (timestamps[i] < date) idx = i;
+  }
+  return idx;
+}
+
+function findFirstOnOrAfter(timestamps, date) {
+  for (let i = 0; i < timestamps.length; i++) {
+    if (timestamps[i] >= date) return i;
+  }
+  return -1;
 }
 
 function round2(n) {
