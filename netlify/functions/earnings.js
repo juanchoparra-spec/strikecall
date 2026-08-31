@@ -42,20 +42,22 @@ exports.handler = async (event) => {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
     }
 
-    // 3. Historial de precios diarios (para calcular cierre previo / reaccion)
+    // 3. Historial de precios diarios (Yahoo Finance, no requiere API key)
     const fromTs = Math.floor(fromDate.getTime() / 1000);
     const toTs = Math.floor(today.getTime() / 1000);
-    const candleRes = await fetch(
-      `${FINNHUB_BASE}/stock/candle?symbol=${symbol}&resolution=D&from=${fromTs}&to=${toTs}&token=${FINNHUB_API_KEY}`
+    const yahooRes = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${fromTs}&period2=${toTs}&interval=1d`,
+      { headers: { "User-Agent": "Mozilla/5.0" } }
     );
-    const candleData = await candleRes.json();
+    const yahooData = await yahooRes.json();
 
-    if (candleData.s !== "ok") {
-      return { statusCode: 404, body: JSON.stringify({ error: "No hay historial de precios disponible (revisa tu plan de Finnhub)" }) };
+    const chartResult = yahooData?.chart?.result?.[0];
+    if (!chartResult) {
+      return { statusCode: 404, body: JSON.stringify({ error: "No hay historial de precios disponible para este ticker" }) };
     }
 
-    const closes = candleData.c;
-    const timestamps = candleData.t.map((t) => new Date(t * 1000));
+    const closes = chartResult.indicators.quote[0].close;
+    const timestamps = chartResult.timestamp.map((t) => new Date(t * 1000));
 
     const results = [];
     for (const earn of earningsCalendar) {
@@ -103,6 +105,7 @@ function calculateGap(timestamps, closes, earnDate) {
   let afterIdx = -1;
 
   for (let i = 0; i < timestamps.length; i++) {
+    if (closes[i] === null || closes[i] === undefined) continue;
     if (timestamps[i] < earnDate) prevIdx = i;
     if (timestamps[i] >= earnDate && afterIdx === -1) afterIdx = i;
   }
