@@ -40,24 +40,7 @@ exports.handler = async (event) => {
     const fromDate = new Date();
     fromDate.setFullYear(today.getFullYear() - 2);
 
-    // 1c. Fecha del earning MAS RECIENTE (puede no estar aun en stock/earnings)
-    let mostRecentDate = null;
-    try {
-      const recentFrom = new Date();
-      recentFrom.setMonth(today.getMonth() - 2);
-      const recentRes = await fetch(
-        `${FINNHUB_BASE}/calendar/earnings?from=${recentFrom.toISOString().slice(0,10)}&to=${today.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
-      );
-      const recentData = await recentRes.json();
-      const pastRecent = (recentData.earningsCalendar || [])
-        .filter((e) => new Date(e.date) <= today)
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-      if (pastRecent.length > 0) mostRecentDate = pastRecent[0].date;
-    } catch (e) {
-      mostRecentDate = null;
-    }
-
-    // 1d. Proximo earning estimado (calendar/earnings a futuro)
+    // 1c. Proximo earning estimado (calendar/earnings a futuro)
     let nextEarningsDate = null;
     try {
       const futureTo = new Date();
@@ -74,49 +57,25 @@ exports.handler = async (event) => {
       nextEarningsDate = null;
     }
 
-    // 2. Historial de earnings pasados (endpoint dedicado por simbolo)
-    const earnRes = await fetch(
-      `${FINNHUB_BASE}/stock/earnings?symbol=${symbol}&token=${FINNHUB_API_KEY}`
+    // 2. Historial de earnings pasados: fecha REAL de reporte + horario (bmo/amc)
+    // (calendar/earnings trae la fecha de publicacion real, a diferencia de stock/earnings
+    // que solo trae el cierre del trimestre fiscal, causa de datos incorrectos)
+    const calRes = await fetch(
+      `${FINNHUB_BASE}/calendar/earnings?from=${fromDate.toISOString().slice(0,10)}&to=${today.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
     );
-    const earnData = await earnRes.json();
-
-    if (!Array.isArray(earnData) || earnData.length === 0) {
-      return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
-    }
-
-    // Este endpoint ya viene ordenado del mas reciente al mas antiguo
-    let earningsCalendar = earnData
-      .filter((e) => e.period && new Date(e.period) < today)
+    const calData = await calRes.json();
+    let earningsCalendar = (calData.earningsCalendar || [])
+      .filter((e) => new Date(e.date) <= today)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 4)
-      .map((e) => ({ date: e.period }));
+      .map((e) => ({ date: e.date, hour: e.hour || "amc" }));
 
     if (earningsCalendar.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
     }
 
-    // Si el calendario detecto un earning mas reciente que no esta en la lista, lo agregamos al frente
-    if (mostRecentDate && !earningsCalendar.some((e) => e.date === mostRecentDate)) {
-      earningsCalendar.unshift({ date: mostRecentDate });
-    }
-    earningsCalendar = earningsCalendar
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 4);
-
-    // 1e. Horario de cada earning (bmo = antes de apertura, amc = despues de cierre)
-    let hourMap = {};
-    try {
-      const hourFrom = new Date();
-      hourFrom.setFullYear(today.getFullYear() - 2);
-      const hourRes = await fetch(
-        `${FINNHUB_BASE}/calendar/earnings?from=${hourFrom.toISOString().slice(0,10)}&to=${today.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
-      );
-      const hourData = await hourRes.json();
-      (hourData.earningsCalendar || []).forEach((e) => {
-        hourMap[e.date] = e.hour || "amc";
-      });
-    } catch (e) {
-      hourMap = {};
-    }
+    const hourMap = {};
+    earningsCalendar.forEach((e) => { hourMap[e.date] = e.hour; });
 
     // 3. Historial de precios diarios (Yahoo Finance, no requiere API key)
     const fromTs = Math.floor(fromDate.getTime() / 1000);
