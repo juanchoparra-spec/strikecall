@@ -24,19 +24,25 @@ exports.handler = async (event) => {
       return { statusCode: 404, body: JSON.stringify({ error: "No se encontro precio para este ticker" }) };
     }
 
-    // 2. Fechas de earnings pasadas (ultimos ~2 anios para asegurar 4 reportados)
     const today = new Date();
     const fromDate = new Date();
     fromDate.setFullYear(today.getFullYear() - 2);
 
-    const calRes = await fetch(
-      `${FINNHUB_BASE}/calendar/earnings?from=${fromDate.toISOString().slice(0,10)}&to=${today.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
+    // 2. Historial de earnings pasados (endpoint dedicado por simbolo)
+    const earnRes = await fetch(
+      `${FINNHUB_BASE}/stock/earnings?symbol=${symbol}&token=${FINNHUB_API_KEY}`
     );
-    const calData = await calRes.json();
-    let earningsCalendar = (calData.earningsCalendar || [])
-      .filter((e) => new Date(e.date) < today)
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 4);
+    const earnData = await earnRes.json();
+
+    if (!Array.isArray(earnData) || earnData.length === 0) {
+      return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
+    }
+
+    // Este endpoint ya viene ordenado del mas reciente al mas antiguo
+    let earningsCalendar = earnData
+      .filter((e) => e.period && new Date(e.period) < today)
+      .slice(0, 4)
+      .map((e) => ({ date: e.period }));
 
     if (earningsCalendar.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
