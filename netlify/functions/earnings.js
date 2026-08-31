@@ -58,44 +58,106 @@ exports.handler = async (event) => {
     }
 
     // 2. Historial de earnings pasados: fecha REAL de reporte + horario (bmo/amc)
-    // El filtro por symbol en calendar/earnings es poco confiable en el plan free,
-    // asi que recorremos mes a mes SIN filtro (en paralelo) y buscamos el ticker nosotros mismos.
-    const monthsToCheck = [];
-    for (let m = 0; m < 15; m++) {
-      const monthEnd = new Date(today.getFullYear(), today.getMonth() - m + 1, 0);
-      const monthStart = new Date(today.getFullYear(), today.getMonth() - m, 1);
-      if (monthEnd > today) monthEnd.setTime(today.getTime());
-      monthsToCheck.push({ from: monthStart, to: monthEnd });
+    // Fuente principal: Nasdaq (API publica, sin key, confirmado con su propia tabla "Date Reported")
+    let earningsCalendar = [];
+    try {
+      const nasdaqRes = await fetch(
+        `https://api.nasdaq.com/api/company/${symbol}/earnings-surprise`,
+        { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" } }
+      );
+      const nasdaqData = await nasdaqRes.json();
+      const rows = nasdaqData?.data?.earningsSurpriseTable?.rows || [];
+      earningsCalendar = rows
+        .map((r) => {
+          const rawDate = r.dateReported || r["Date Reported"] || r.date;
+          if (!rawDate) return null;
+          const parsed = new Date(rawDate);
+          if (isNaN(parsed.getTime()) || parsed > today) return null;
+          return { date: parsed.toISOString().slice(0,10), hour: "amc", estimated: false };
+        })
+        .filter((r) => r !== null)
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 4);
+    } catch (e) {
+      earningsCalendar = [];
     }
 
-    const monthResults = await Promise.all(
-      monthsToCheck.map(async ({ from, to }) => {
-        try {
-          const monthRes = await fetch(
-            `${FINNHUB_BASE}/calendar/earnings?from=${from.toISOString().slice(0,10)}&to=${to.toISOString().slice(0,10)}&token=${FINNHUB_API_KEY}`
-          );
-          const monthData = await monthRes.json();
-          return (monthData.earningsCalendar || []).filter(
-            (e) => e.symbol === symbol && new Date(e.date) <= today
-          );
-        } catch (e) {
-          return [];
-        }
-      })
-    );
+    // Fuente de respaldo: si Nasdaq no respondio o cambio de formato, usamos Finnhub por ventanas
+    if (earningsCalendar.length === 0) {
+      const earnRes = await fetch(
+        `${FINNHUB_BASE}/stock/earnings?symbol=${symbol}&token=${FINNHUB_API_KEY}`
+      );
+      const earnData = await earnRes.json();
 
-    let earningsCalendar = monthResults
-      .flat()
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 4)
-      .map((e) => ({ date: e.date, hour: e.hour || "amc" }));
+      if (Array.isArray(earnData) && earnData.length > 0) {
+        const periods = earnData
+          .filter((e) => e.period && new Date(e.period) < today)
+          .slice(0, 4);
+
+        const windowResults = await Promise.all(
+          periods.map(async (p) => {
+            const winFrom = new Date(p.period);
+            const winTo = new Date(p.period);
+            winTo.setDate(winTo.getDate() + 100);
+            if (winTo > today) winTo.setTime(today.getTime());
+
+            try {
+              const winRes = await fetch(
+                `${FINNHUB_BASE}/calendar/earnings?from=${winFrom.toISOString().slice(0,10)}&to=${winTo.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
+              );
+              const winData = await winRes.json();
+              const matches = (winData.earningsCalendar || []).filter((e) => new Date(e.date) <= today);
+              if (matches.length > 0) {
+                return { date: matches[0].date, hour: matches[0].hour || "amc", estimated: false };
+              }
+            } catch (e) {}
+
+            const approx = new Date(p.period);
+            approx.setDate(approx.getDate() + 35);
+            if (approx > today) return null;
+            const day = approx.getUTCDay();
+            if (day === 0) approx.setDate(approx.getDate() + 1);
+            if (day === 6) approx.setDate(approx.getDate() + 2);
+            return { date: approx.toISOString().slice(0,10), hour: "amc", estimated: true };
+          })
+        );
+
+        earningsCalendar = windowResults
+          .filter((r) => r !== null)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 4);
+      }
+    }
 
     if (earningsCalendar.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
     }
 
+    // 2b. Confirmar horario (bmo/amc) de cada fecha ya conocida, consultando Finnhub
+    // en una ventana angosta alrededor de esa fecha exacta (Nasdaq no da esta info)
+    const hourResults = await Promise.all(
+      earningsCalendar.map(async (e) => {
+        const winFrom = new Date(e.date);
+        winFrom.setDate(winFrom.getDate() - 3);
+        const winTo = new Date(e.date);
+        winTo.setDate(winTo.getDate() + 3);
+        try {
+          const hRes = await fetch(
+            `${FINNHUB_BASE}/calendar/earnings?from=${winFrom.toISOString().slice(0,10)}&to=${winTo.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
+          );
+          const hData = await hRes.json();
+          const match = (hData.earningsCalendar || []).find((x) => x.date === e.date);
+          return match?.hour || "amc";
+        } catch (err) {
+          return "amc";
+        }
+      })
+    );
+    earningsCalendar.forEach((e, i) => { e.hour = hourResults[i]; });
+
     const hourMap = {};
-    earningsCalendar.forEach((e) => { hourMap[e.date] = e.hour; });
+    const estimatedMap = {};
+    earningsCalendar.forEach((e) => { hourMap[e.date] = e.hour; estimatedMap[e.date] = e.estimated; });
 
     // 3. Historial de precios diarios (Yahoo Finance, no requiere API key)
     const fromTs = Math.floor(fromDate.getTime() / 1000);
@@ -121,7 +183,7 @@ exports.handler = async (event) => {
       const hour = hourMap[earn.date] || "amc";
       const gapInfo = calculateGap(timestamps, closes, opens, earnDate, hour);
       if (gapInfo) {
-        results.push({ date: earn.date, hour, ...gapInfo });
+        results.push({ date: earn.date, hour, estimated: !!estimatedMap[earn.date], ...gapInfo });
       }
     }
 
