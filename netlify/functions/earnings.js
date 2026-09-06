@@ -77,7 +77,7 @@ exports.handler = async (event) => {
         })
         .filter((r) => r !== null)
         .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .slice(0, 4);
+        .slice(0, 5);
     } catch (e) {
       earningsCalendar = [];
     }
@@ -92,7 +92,7 @@ exports.handler = async (event) => {
       if (Array.isArray(earnData) && earnData.length > 0) {
         const periods = earnData
           .filter((e) => e.period && new Date(e.period) < today)
-          .slice(0, 4);
+          .slice(0, 5);
 
         const windowResults = await Promise.all(
           periods.map(async (p) => {
@@ -125,7 +125,7 @@ exports.handler = async (event) => {
         earningsCalendar = windowResults
           .filter((r) => r !== null)
           .sort((a, b) => new Date(b.date) - new Date(a.date))
-          .slice(0, 4);
+          .slice(0, 5);
       }
     }
 
