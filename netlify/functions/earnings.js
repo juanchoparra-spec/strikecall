@@ -4,6 +4,7 @@
 
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
+const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY;
 
 exports.handler = async (event) => {
   const symbol = (event.path.split("/").pop() || "").toUpperCase().trim();
@@ -58,31 +59,49 @@ exports.handler = async (event) => {
     }
 
     // 2. Historial de earnings pasados: fecha REAL de reporte + horario (bmo/amc)
-    // Fuente principal: Nasdaq (API publica, sin key, confirmado con su propia tabla "Date Reported")
+    // Fuente principal: Alpha Vantage (historial COMPLETO, no limitado a 4 trimestres)
     let earningsCalendar = [];
     try {
-      const nasdaqRes = await fetch(
-        `https://api.nasdaq.com/api/company/${symbol}/earnings-surprise`,
-        { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" } }
+      const avRes = await fetch(
+        `https://www.alphavantage.co/query?function=EARNINGS&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      const nasdaqData = await nasdaqRes.json();
-      const rows = nasdaqData?.data?.earningsSurpriseTable?.rows || [];
-      earningsCalendar = rows
-        .map((r) => {
-          const rawDate = r.dateReported || r["Date Reported"] || r.date;
-          if (!rawDate) return null;
-          const parsed = new Date(rawDate);
-          if (isNaN(parsed.getTime()) || parsed > today) return null;
-          return { date: parsed.toISOString().slice(0,10), hour: "amc", estimated: false };
-        })
-        .filter((r) => r !== null)
+      const avData = await avRes.json();
+      const quarterly = avData.quarterlyEarnings || [];
+      earningsCalendar = quarterly
+        .filter((q) => q.reportedDate && q.reportedDate !== "None" && new Date(q.reportedDate) <= today)
+        .map((q) => ({ date: q.reportedDate, hour: "amc", estimated: false }))
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 5);
     } catch (e) {
       earningsCalendar = [];
     }
 
-    // Fuente de respaldo: si Nasdaq no respondio o cambio de formato, usamos Finnhub por ventanas
+    // Fuente secundaria: Nasdaq (si Alpha Vantage fallo o alcanzo su limite diario de 25/dia)
+    if (earningsCalendar.length === 0) {
+      try {
+        const nasdaqRes = await fetch(
+          `https://api.nasdaq.com/api/company/${symbol}/earnings-surprise`,
+          { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" } }
+        );
+        const nasdaqData = await nasdaqRes.json();
+        const rows = nasdaqData?.data?.earningsSurpriseTable?.rows || [];
+        earningsCalendar = rows
+          .map((r) => {
+            const rawDate = r.dateReported || r["Date Reported"] || r.date;
+            if (!rawDate) return null;
+            const parsed = new Date(rawDate);
+            if (isNaN(parsed.getTime()) || parsed > today) return null;
+            return { date: parsed.toISOString().slice(0,10), hour: "amc", estimated: false };
+          })
+          .filter((r) => r !== null)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 5);
+      } catch (e) {
+        earningsCalendar = [];
+      }
+    }
+
+    // Fuente de respaldo final: si tampoco Nasdaq respondio, usamos Finnhub por ventanas
     if (earningsCalendar.length === 0) {
       const earnRes = await fetch(
         `${FINNHUB_BASE}/stock/earnings?symbol=${symbol}&token=${FINNHUB_API_KEY}`
