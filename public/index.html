@@ -167,7 +167,7 @@
     </div>
   </div>
 
-  <div class="section-title">Últimos 4 earnings</div>
+  <div class="section-title">Últimos 5 earnings</div>
   <div id="earningsList"></div>
 </div>
 
@@ -268,7 +268,7 @@ function renderResults(data, symbol) {
   list.innerHTML = data.earnings_history.map(e => `
     <div class="earning-row">
       <div>
-        <div class="date">${e.date}</div>
+        <div class="date">${e.date}${e.estimated ? ' <span style="color:#b45309;font-size:11px;">(fecha estimada)</span>' : ''}</div>
         <div class="prices">Cerró $${e.prev_close} → Abrió $${e.reaction_close}</div>
         <div class="prices" style="opacity:0.7;">${e.hour === 'bmo' ? 'Reportó antes de apertura' : 'Reportó después de cierre'}</div>
       </div>
