@@ -175,6 +175,21 @@ exports.handler = async (event) => {
       } catch (e) {}
     }
 
+    // Filtro de seguridad: descartar fechas duplicadas/muy cercanas (los trimestres reales
+    // estan separados ~90 dias; si dos fechas quedan a menos de 45 dias, es un error de datos)
+    if (earningsCalendar.length > 1) {
+      const deduped = [earningsCalendar[0]];
+      for (let i = 1; i < earningsCalendar.length; i++) {
+        const prevKept = new Date(deduped[deduped.length - 1].date);
+        const current = new Date(earningsCalendar[i].date);
+        const diffDays = Math.abs((prevKept - current) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 45) {
+          deduped.push(earningsCalendar[i]);
+        }
+      }
+      earningsCalendar = deduped;
+    }
+
     if (earningsCalendar.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
     }
