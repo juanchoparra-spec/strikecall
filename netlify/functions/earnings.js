@@ -129,6 +129,52 @@ exports.handler = async (event) => {
       }
     }
 
+    // Si Nasdaq nos dio menos de 5 (su tabla suele traer solo 4), buscamos 1 trimestre
+    // mas antiguo via Finnhub (periodo fiscal + ventana de busqueda de fecha real)
+    if (earningsCalendar.length > 0 && earningsCalendar.length < 5) {
+      try {
+        const oldestKnown = new Date(earningsCalendar[earningsCalendar.length - 1].date);
+        const earnRes2 = await fetch(
+          `${FINNHUB_BASE}/stock/earnings?symbol=${symbol}&token=${FINNHUB_API_KEY}`
+        );
+        const earnData2 = await earnRes2.json();
+        if (Array.isArray(earnData2)) {
+          const olderPeriods = earnData2
+            .filter((e) => e.period && new Date(e.period) < oldestKnown)
+            .slice(0, 5 - earningsCalendar.length);
+
+          for (const p of olderPeriods) {
+            const winFrom2 = new Date(p.period);
+            const winTo2 = new Date(p.period);
+            winTo2.setDate(winTo2.getDate() + 100);
+            if (winTo2 > today) winTo2.setTime(today.getTime());
+            let added = false;
+            try {
+              const winRes2 = await fetch(
+                `${FINNHUB_BASE}/calendar/earnings?from=${winFrom2.toISOString().slice(0,10)}&to=${winTo2.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
+              );
+              const winData2 = await winRes2.json();
+              const matches2 = (winData2.earningsCalendar || []).filter((e) => new Date(e.date) <= today);
+              if (matches2.length > 0) {
+                earningsCalendar.push({ date: matches2[0].date, hour: matches2[0].hour || "amc", estimated: false });
+                added = true;
+              }
+            } catch (e) {}
+            if (!added) {
+              const approx2 = new Date(p.period);
+              approx2.setDate(approx2.getDate() + 35);
+              if (approx2 <= today) {
+                earningsCalendar.push({ date: approx2.toISOString().slice(0,10), hour: "amc", estimated: true });
+              }
+            }
+          }
+          earningsCalendar = earningsCalendar
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 5);
+        }
+      } catch (e) {}
+    }
+
     if (earningsCalendar.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
     }
