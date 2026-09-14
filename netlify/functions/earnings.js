@@ -44,6 +44,7 @@ exports.handler = async (event) => {
     // 1c. Proximo earning estimado
     // Intento 1: Nasdaq (su pagina muestra "Next Report Date" directamente)
     let nextEarningsDate = null;
+    let nextEarningsIsApprox = false;
     try {
       const nasdaqNextRes = await fetch(
         `https://api.nasdaq.com/api/quote/${symbol}/earnings-forecast`,
@@ -237,6 +238,27 @@ exports.handler = async (event) => {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
     }
 
+    // Intento 3: Yahoo Finance (calendarEvents) - si Nasdaq y Finnhub no dieron fecha real
+    if (!nextEarningsDate) {
+      try {
+        const yahooCalRes = await fetch(
+          `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=calendarEvents`,
+          { headers: { "User-Agent": "Mozilla/5.0" } }
+        );
+        const yahooCalData = await yahooCalRes.json();
+        const earningsDates = yahooCalData?.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate || [];
+        const rawTs = earningsDates[0]?.raw;
+        if (rawTs) {
+          const parsedYahoo = new Date(rawTs * 1000);
+          if (!isNaN(parsedYahoo.getTime()) && parsedYahoo >= today) {
+            nextEarningsDate = parsedYahoo.toISOString().slice(0,10);
+          }
+        }
+      } catch (e) {}
+    }
+    // Si ninguna de las 3 fuentes reales tiene la fecha, nextEarningsDate queda null
+    // y el recuadro simplemente no se muestra (no inventamos una fecha aproximada)
+
     // 2b. Confirmar horario (bmo/amc) de cada fecha ya conocida, consultando Finnhub
     // en una ventana angosta alrededor de esa fecha exacta (Nasdaq no da esta info)
     const hourResults = await Promise.all(
@@ -326,6 +348,7 @@ exports.handler = async (event) => {
         logo,
         current_price: round2(currentPrice),
         next_earnings_date: nextEarningsDate,
+        next_earnings_is_approx: nextEarningsIsApprox,
         next_earnings_estimated: nextEarningsEstimated,
         earnings_history: results,
         avg_move_dollar: avgMoveDollar,
