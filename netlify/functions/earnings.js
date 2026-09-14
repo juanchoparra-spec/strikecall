@@ -41,8 +41,31 @@ exports.handler = async (event) => {
     const fromDate = new Date();
     fromDate.setFullYear(today.getFullYear() - 2);
 
-    // 1c. Proximo earning estimado (calendar/earnings a futuro)
+    // 1c. Proximo earning estimado
+    // Intento 1: Nasdaq (su pagina muestra "Next Report Date" directamente)
     let nextEarningsDate = null;
+    try {
+      const nasdaqNextRes = await fetch(
+        `https://api.nasdaq.com/api/quote/${symbol}/earnings-forecast`,
+        { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" } }
+      );
+      const nasdaqNextData = await nasdaqNextRes.json();
+      const nextDateRaw =
+        nasdaqNextData?.data?.nextReportDate ||
+        nasdaqNextData?.data?.earningsForecastTable?.rows?.[0]?.reportDate ||
+        null;
+      if (nextDateRaw) {
+        const parsedNext = new Date(nextDateRaw);
+        if (!isNaN(parsedNext.getTime()) && parsedNext >= today) {
+          nextEarningsDate = parsedNext.toISOString().slice(0,10);
+        }
+      }
+    } catch (e) {
+      nextEarningsDate = null;
+    }
+
+    // Intento 2: Finnhub (calendar/earnings a futuro)
+    if (!nextEarningsDate) {
     try {
       const futureTo = new Date();
       futureTo.setMonth(today.getMonth() + 4);
@@ -56,6 +79,7 @@ exports.handler = async (event) => {
       if (upcoming.length > 0) nextEarningsDate = upcoming[0].date;
     } catch (e) {
       nextEarningsDate = null;
+    }
     }
 
     // 2. Historial de earnings pasados: fecha REAL de reporte + horario (bmo/amc)
@@ -239,6 +263,19 @@ exports.handler = async (event) => {
     const estimatedMap = {};
     earningsCalendar.forEach((e) => { hourMap[e.date] = e.hour; estimatedMap[e.date] = e.estimated; });
 
+    // Fallback: si Finnhub no dio proximo earning, lo aproximamos con
+    // ultimo earning conocido + ~91 dias (patron tipico entre trimestres)
+    let nextEarningsEstimated = false;
+    if (!nextEarningsDate && earningsCalendar.length > 0) {
+      const approxNext = new Date(earningsCalendar[0].date);
+      approxNext.setDate(approxNext.getDate() + 91);
+      const day = approxNext.getUTCDay();
+      if (day === 0) approxNext.setDate(approxNext.getDate() + 1);
+      if (day === 6) approxNext.setDate(approxNext.getDate() + 2);
+      nextEarningsDate = approxNext.toISOString().slice(0,10);
+      nextEarningsEstimated = true;
+    }
+
     // 3. Historial de precios diarios (Yahoo Finance, no requiere API key)
     const fromTs = Math.floor(fromDate.getTime() / 1000);
     const toTs = Math.floor(today.getTime() / 1000);
@@ -289,6 +326,7 @@ exports.handler = async (event) => {
         logo,
         current_price: round2(currentPrice),
         next_earnings_date: nextEarningsDate,
+        next_earnings_estimated: nextEarningsEstimated,
         earnings_history: results,
         avg_move_dollar: avgMoveDollar,
         avg_move_percent: avgMovePercent,
