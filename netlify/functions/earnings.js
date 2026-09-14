@@ -42,45 +42,29 @@ exports.handler = async (event) => {
     fromDate.setFullYear(today.getFullYear() - 2);
 
     // 1c. Proximo earning estimado
-    // Intento 1: Nasdaq (su pagina muestra "Next Report Date" directamente)
+    // Fuente: Alpha Vantage EARNINGS_CALENDAR (endpoint oficial y documentado,
+    // misma API key que ya usamos para el historial, mas confiable que adivinar formatos)
     let nextEarningsDate = null;
-    let nextEarningsIsApprox = false;
     try {
-      const nasdaqNextRes = await fetch(
-        `https://api.nasdaq.com/api/quote/${symbol}/earnings-forecast`,
-        { headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" } }
+      const calRes = await fetch(
+        `https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&symbol=${symbol}&horizon=3month&apikey=${ALPHA_VANTAGE_API_KEY}`
       );
-      const nasdaqNextData = await nasdaqNextRes.json();
-      const nextDateRaw =
-        nasdaqNextData?.data?.nextReportDate ||
-        nasdaqNextData?.data?.earningsForecastTable?.rows?.[0]?.reportDate ||
-        null;
-      if (nextDateRaw) {
-        const parsedNext = new Date(nextDateRaw);
-        if (!isNaN(parsedNext.getTime()) && parsedNext >= today) {
-          nextEarningsDate = parsedNext.toISOString().slice(0,10);
+      const csvText = await calRes.text();
+      const lines = csvText.trim().split("\n");
+      if (lines.length > 1) {
+        const headers = lines[0].split(",");
+        const dateIdx = headers.indexOf("reportDate");
+        const row = lines[1].split(",");
+        const rawDate = row[dateIdx];
+        if (rawDate) {
+          const parsedCal = new Date(rawDate);
+          if (!isNaN(parsedCal.getTime()) && parsedCal >= today) {
+            nextEarningsDate = parsedCal.toISOString().slice(0,10);
+          }
         }
       }
     } catch (e) {
       nextEarningsDate = null;
-    }
-
-    // Intento 2: Finnhub (calendar/earnings a futuro)
-    if (!nextEarningsDate) {
-    try {
-      const futureTo = new Date();
-      futureTo.setMonth(today.getMonth() + 4);
-      const nextRes = await fetch(
-        `${FINNHUB_BASE}/calendar/earnings?from=${today.toISOString().slice(0,10)}&to=${futureTo.toISOString().slice(0,10)}&symbol=${symbol}&token=${FINNHUB_API_KEY}`
-      );
-      const nextData = await nextRes.json();
-      const upcoming = (nextData.earningsCalendar || [])
-        .filter((e) => new Date(e.date) >= today)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-      if (upcoming.length > 0) nextEarningsDate = upcoming[0].date;
-    } catch (e) {
-      nextEarningsDate = null;
-    }
     }
 
     // 2. Historial de earnings pasados: fecha REAL de reporte + horario (bmo/amc)
@@ -238,26 +222,8 @@ exports.handler = async (event) => {
       return { statusCode: 404, body: JSON.stringify({ error: "No hay earnings pasados registrados para este ticker" }) };
     }
 
-    // Intento 3: Yahoo Finance (calendarEvents) - si Nasdaq y Finnhub no dieron fecha real
-    if (!nextEarningsDate) {
-      try {
-        const yahooCalRes = await fetch(
-          `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=calendarEvents`,
-          { headers: { "User-Agent": "Mozilla/5.0" } }
-        );
-        const yahooCalData = await yahooCalRes.json();
-        const earningsDates = yahooCalData?.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate || [];
-        const rawTs = earningsDates[0]?.raw;
-        if (rawTs) {
-          const parsedYahoo = new Date(rawTs * 1000);
-          if (!isNaN(parsedYahoo.getTime()) && parsedYahoo >= today) {
-            nextEarningsDate = parsedYahoo.toISOString().slice(0,10);
-          }
-        }
-      } catch (e) {}
-    }
-    // Si ninguna de las 3 fuentes reales tiene la fecha, nextEarningsDate queda null
-    // y el recuadro simplemente no se muestra (no inventamos una fecha aproximada)
+    // Si Alpha Vantage no tiene el proximo earning en su calendario (empresa aun no
+    // publica fecha oficial), el recuadro simplemente no se muestra - no inventamos fecha
 
     // 2b. Confirmar horario (bmo/amc) de cada fecha ya conocida, consultando Finnhub
     // en una ventana angosta alrededor de esa fecha exacta (Nasdaq no da esta info)
@@ -285,18 +251,7 @@ exports.handler = async (event) => {
     const estimatedMap = {};
     earningsCalendar.forEach((e) => { hourMap[e.date] = e.hour; estimatedMap[e.date] = e.estimated; });
 
-    // Fallback: si Finnhub no dio proximo earning, lo aproximamos con
-    // ultimo earning conocido + ~91 dias (patron tipico entre trimestres)
-    let nextEarningsEstimated = false;
-    if (!nextEarningsDate && earningsCalendar.length > 0) {
-      const approxNext = new Date(earningsCalendar[0].date);
-      approxNext.setDate(approxNext.getDate() + 91);
-      const day = approxNext.getUTCDay();
-      if (day === 0) approxNext.setDate(approxNext.getDate() + 1);
-      if (day === 6) approxNext.setDate(approxNext.getDate() + 2);
-      nextEarningsDate = approxNext.toISOString().slice(0,10);
-      nextEarningsEstimated = true;
-    }
+    // (Ya no usamos fecha aproximada: si Alpha Vantage no tiene el dato, queda null)
 
     // 3. Historial de precios diarios (Yahoo Finance, no requiere API key)
     const fromTs = Math.floor(fromDate.getTime() / 1000);
@@ -348,8 +303,6 @@ exports.handler = async (event) => {
         logo,
         current_price: round2(currentPrice),
         next_earnings_date: nextEarningsDate,
-        next_earnings_is_approx: nextEarningsIsApprox,
-        next_earnings_estimated: nextEarningsEstimated,
         earnings_history: results,
         avg_move_dollar: avgMoveDollar,
         avg_move_percent: avgMovePercent,
