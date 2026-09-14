@@ -86,12 +86,20 @@
   .stat-box .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; }
   .stat-box .value { font-size:19px; font-weight:800; margin-top:4px; color:#1e40af; }
 
-  .next-earnings {
-    background:#eaf1fb; border-radius:12px; padding:12px 14px; margin-bottom:18px;
-    text-align:center; border:2px solid #2563eb;
+  .earnings-dates-row {
+    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;
   }
-  .next-earnings .label { font-size:11px; color:#3d5a85; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; }
-  .next-earnings .value { font-size:16px; font-weight:800; margin-top:2px; color:#1e40af; }
+  .earnings-dates-row .date-box {
+    border-radius:12px; padding:12px 10px; text-align:center; border:2px solid;
+  }
+  .earnings-dates-row .last-box { background:#eaf1fb; border-color:#2563eb; }
+  .earnings-dates-row .next-box { background:#fefbea; border-color:#d4a017; }
+  .earnings-dates-row .label { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; }
+  .earnings-dates-row .last-box .label { color:#3d5a85; }
+  .earnings-dates-row .next-box .label { color:#92720c; }
+  .earnings-dates-row .value { font-size:14px; font-weight:800; margin-top:2px; }
+  .earnings-dates-row .last-box .value { color:#1e40af; }
+  .earnings-dates-row .next-box .value { color:#92720c; }
 
   .section-title { font-size:14px; font-weight:700; color:#3d5a85; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
 
@@ -151,9 +159,15 @@
     <div class="value" id="priceBannerText">--</div>
   </div>
 
-  <div class="next-earnings" id="nextEarningsBox" style="display:none;">
-    <div class="label">Último earning reportado</div>
-    <div class="value" id="nextEarningsDate">--</div>
+  <div class="earnings-dates-row">
+    <div class="date-box last-box">
+      <div class="label">Último reportado</div>
+      <div class="value" id="lastEarningsDate">--</div>
+    </div>
+    <div class="date-box next-box" id="nextEarningsBox" style="display:none;">
+      <div class="label">Próximo estimado</div>
+      <div class="value" id="nextEarningsDateValue">--</div>
+    </div>
   </div>
 
   <div class="stat-grid">
@@ -256,9 +270,13 @@ function renderResults(data, symbol) {
   document.getElementById("positiveCount").textContent =
     `${data.positive_count}/${data.total_count}`;
 
-  const nextBox = document.getElementById("nextEarningsBox");
   if (data.earnings_history && data.earnings_history.length > 0) {
-    document.getElementById("nextEarningsDate").textContent = data.earnings_history[0].date;
+    document.getElementById("lastEarningsDate").textContent = data.earnings_history[0].date;
+  }
+
+  const nextBox = document.getElementById("nextEarningsBox");
+  if (data.next_earnings_date) {
+    document.getElementById("nextEarningsDateValue").textContent = data.next_earnings_date;
     nextBox.style.display = "block";
   } else {
     nextBox.style.display = "none";
